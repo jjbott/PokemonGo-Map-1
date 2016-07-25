@@ -1652,6 +1652,29 @@ function centerMap (lat, lng, zoom) {
   }
 }
 
+function updateNotifiedPokemon() {
+  notifiedPokemon = $selectPokemonNotify.val().map(Number)
+  Store.set('remember_select_notify', notifiedPokemon)
+
+  notifiedRarity = $selectRarityNotify.val().map(String)
+  Store.set('remember_select_rarity_notify', notifiedRarity)
+
+  $.each(mapData.pokemons, function(encounterId, item) {
+    if ( item.marker ) {
+      if (notifiedPokemon.indexOf(item['pokemon_id']) > -1 || notifiedRarity.indexOf(item['pokemon_rarity']) > -1) {
+        if (!item.marker.animationDisabled && !item.marker.getAnimation() ) {
+          item.marker.setAnimation(google.maps.Animation.BOUNCE);
+          item.marker.oldAnimation = google.maps.Animation.BOUNCE;
+        }
+      }
+      else {
+        item.marker.setAnimation(null);   
+        item.marker.oldAnimation = null;
+      }
+    }
+  });
+}
+
 function i8ln (word) {
   if ($.isEmptyObject(i8lnDictionary) && language !== 'en' && languageLookups < languageLookupThreshold) {
     $.ajax({
@@ -1831,12 +1854,10 @@ $(function () {
       Store.set('remember_select_exclude', excludedPokemon)
     })
     $selectPokemonNotify.on('change', function (e) {
-      notifiedPokemon = $selectPokemonNotify.val().map(Number)
-      Store.set('remember_select_notify', notifiedPokemon)
+      updateNotifiedPokemon()
     })
     $selectRarityNotify.on('change', function (e) {
-      notifiedRarity = $selectRarityNotify.val().map(String)
-      Store.set('remember_select_rarity_notify', notifiedRarity)
+      updateNotifiedPokemon();
     })
 
     // recall saved lists
