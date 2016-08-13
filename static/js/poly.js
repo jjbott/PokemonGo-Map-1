@@ -20,7 +20,9 @@ function refreshOutput () {
     polystrings.push(arr)
     // coords!
     $.each(poly.circles, function (index, circle) {
-      coords.push([circle.center.lat(), circle.center.lng()])
+      if ( circle.getMap()) {
+        coords.push([circle.center.lat(), circle.center.lng()])
+      }
     })
   })
   $('#polylist').text(JSON.stringify(polystrings))
@@ -146,36 +148,62 @@ function coverPath (poly) {
   //   zIndex: 1
   // });
 
-  // cover it in circles
-  var curLat = lats.min();
-  var curLng = lngs.min();
-  var maxPoint = new google.maps.LatLng(lats.max(), lngs.max());
+  var minLat = lats.min();
+  var minLng = lngs.min();
   var radiusInKm = 140 / 1000;
+  var minPoint = new google.maps.LatLng(minLat, minLng);
+  var minScanPoint = minPoint.destinationPoint(180, radiusInKm).destinationPoint(-90, radiusInKm);
+  var maxPoint = new google.maps.LatLng(lats.max(), lngs.max());
+  
   var onePointFurther = maxPoint.destinationPoint(90, radiusInKm / 2).destinationPoint(0, radiusInKm / 2);
+  var bestCircles = [];
 
-  // var toomany = 100;
+  for (var lat = minScanPoint.lat(); lat <= minPoint.lat(); lat += (minPoint.lat() - minScanPoint.lat()) / 10) {
+    for (var lng = minScanPoint.lng(); lng <= minPoint.lng(); lng += (minPoint.lng() - minScanPoint.lng()) / 10) {
+      var circles = []
+// cover it in circles
+      var curLat = lat;
+      var curLng = lng;
+      
+      // var toomany = 100;
 
-  while (curLng < onePointFurther.lng()) {
-    // if (toomany <= 0) break
-    while (curLat < onePointFurther.lat()) {
-      // if (toomany-- <= 0) break
-      var pointA = new google.maps.LatLng(curLat, curLng);
-      var pointB = pointA.destinationPoint(90, radiusInKm * 1.732 / 4).destinationPoint(0, radiusInKm * 3 / 4);
-      circIfIn(pointA, poly)
-      circIfIn(pointB, poly)
-      var nextPoint = pointA.destinationPoint(0, radiusInKm * 3 / 2);
-      curLat = nextPoint.lat();
+      while (curLng < onePointFurther.lng()) {
+        // if (toomany <= 0) break
+        while (curLat < onePointFurther.lat()) {
+          // if (toomany-- <= 0) break
+          var pointA = new google.maps.LatLng(curLat, curLng);
+          var pointB = pointA.destinationPoint(90, radiusInKm * 1.732 / 4).destinationPoint(0, radiusInKm * 3 / 4);
+          circIfIn(pointA, poly, circles)
+          circIfIn(pointB, poly, circles)
+          var nextPoint = pointA.destinationPoint(0, radiusInKm * 3 / 2);
+          curLat = nextPoint.lat();
+        }
+        curLat = lat;
+        var pointNext = new google.maps.LatLng(curLat, curLng);
+        curLng = pointNext.destinationPoint(90, radiusInKm * 1.732 / 2).lng();
+      }
+
+      if ( bestCircles.length == 0 || bestCircles.length > circles.length ) {
+        bestCircles = circles;
+      }
+
     }
-    curLat = lats.min();
-    var pointNext = new google.maps.LatLng(curLat, curLng);
-    curLng = pointNext.destinationPoint(90, radiusInKm * 1.732 / 2).lng();
+
+    
+
   }
+
+
+  $.each(bestCircles, function (index, circle) {
+      poly.circles.push(drawScanCircle(circle, '#00ff00'))
+    })
+  
 }
 
-function circIfIn (point, poly) {
+function circIfIn (point, poly, circles) {
   if (google.maps.geometry.poly.containsLocation(point, poly)) {
     // main point directly in poly, cool, do it
-    poly.circles.push(drawScanCircle(point, '#00ff00'))
+    circles.push(point)
     return
   } else {
     // The center point isn't in the poly -- but is one of the edges?
@@ -184,7 +212,7 @@ function circIfIn (point, poly) {
       var detectionPoint = point.destinationPoint(radial, 0.07); // todo: fix hardcoded 70m
       if (google.maps.geometry.poly.containsLocation(detectionPoint, poly)) {
         // edge point directly in poly, cool, do it
-        poly.circles.push(drawScanCircle(point, '#00ff00'))
+        circles.push(point)
         return
       }
     }
@@ -195,7 +223,7 @@ function circIfIn (point, poly) {
 }
 
 function drawScanCircle (point, color) {
-  return new google.maps.Circle({
+  var circle = new google.maps.Circle({
     strokeColor: color,
     strokeOpacity: 0.8,
     strokeWeight: 1,
@@ -204,8 +232,18 @@ function drawScanCircle (point, color) {
     map: map,
     center: point,
     radius: 70,
-    zIndex: 1
+    zIndex: 200,
+  draggable: true,
+  geodesic: true
   })
+  google.maps.event.addListener(circle, 'center_changed', refreshOutput);
+  google.maps.event.addListener(circle, 'rightclick', circleClick);
+  return circle;
+}
+
+function circleClick(event) {
+  this.setMap(null);
+  refreshOutput();
 }
 
 /*eslint no-extend-native: ["error", { "exceptions": ["Array", "Number"] }]*/
